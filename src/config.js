@@ -21,3 +21,4 @@ export const APP_CONFIG = {
 //   (proses_tabungan, tarik_tabungan) tetap dipakai apa adanya.
 // - Transaksi tetap TIDAK BISA dihapus dari UI (sengaja, sesuai desain awal
 //   biar riwayat keuangan user nggak bisa diutak-atik/dihapus diam-diam).
+// update fitur dan framworkk terus bug diperbaiki semuanya
