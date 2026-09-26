@@ -24,7 +24,8 @@ export const APP_CONFIG = {
         "perbaikan fitur tabungan yang tadinya tidak bisa dihapus sekarang bisa dan ada tombol untuk mengedit",
         "di fitur notifikasi sebelumnya, tidak bisa di klik tombolnya",
         "Memperbaiki fitur sebelumnya",
-        "Memperbaiki app nya, karna bug"
+        "Memperbaiki app nya, karna bug",
+        "Memperbaiki di main js nya bug route",
       ]
     },
     {
