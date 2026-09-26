@@ -32,11 +32,12 @@
           <div class="goal-actions">
             <button class="btn btn-success btn-sm" @click="bukaModalIsi(g.id)">Isi Tabungan</button>
             <button class="btn btn-warning btn-sm" @click="bukaModalTarik(g.id)">Tarik Dana</button>
-            
+            <!-- Tombol Edit Target -->
+            <button class="btn btn-info btn-sm text-white" @click="bukaModalEdit(g)">Edit</button>
+            <!-- Tombol Hapus (Bisa dihapus kapan saja, dengan konfirmasi) -->
             <button
               class="btn btn-danger btn-sm"
-              :disabled="persenGoal(g) < 100"
-              :title="persenGoal(g) < 100 ? 'Target harus 100% lunas untuk dihapus & diambil tabungannya' : 'Hapus & Ambil Tabungan'"
+              title="Hapus Target"
               @click="bukaModalKonfirmasiHapus(g)"
             >
               Hapus
@@ -46,21 +47,21 @@
       </div>
     </div>
 
-    <!-- ===== Modal Konfirmasi Ambil / Hapus Target Lunas ===== -->
-    <AppModal v-model="showModalHapus" title="Konfirmasi Ambil Tabungan">
+    <!-- ===== Modal Konfirmasi Hapus Target ===== -->
+    <AppModal v-model="showModalHapus" title="Konfirmasi Hapus Target">
       <div class="modal-body-confirm">
-        <p><strong>Apakah mau diambil tabungannya?</strong></p>
+        <p><strong>Apakah kamu yakin ingin menghapus target ini?</strong></p>
         <p v-if="selectedGoalHapus">
-          Target <strong>{{ selectedGoalHapus.nama_goal }}</strong> sudah terkumpul 
-          <span class="text-success font-bold">{{ formatRupiah(selectedGoalHapus.terkumpul) }}</span>. 
-          Target akan dihapus dari daftar setelah dana diambil.
+          Target <strong>{{ selectedGoalHapus.nama_goal }}</strong> dengan dana terkumpul 
+          <span class="text-success font-bold">{{ formatRupiah(selectedGoalHapus.terkumpul) }}</span> 
+          akan dihapus permanen dari daftar.
         </p>
       </div>
       <div class="modal-actions" style="margin-top: 20px;">
         <button type="button" class="btn btn-secondary" @click="showModalHapus = false">Batal</button>
         <button type="button" class="btn btn-danger" :disabled="isSubmittingHapus" @click="prosesHapusGoal">
           <BaseSpinner v-if="isSubmittingHapus" />
-          Ya, Ambil & Hapus
+          Ya, Hapus Target
         </button>
       </div>
     </AppModal>
@@ -89,6 +90,34 @@
         <button type="submit" class="btn btn-success btn-block" :disabled="isSubmittingGoal">
           <BaseSpinner v-if="isSubmittingGoal" />
           {{ isSubmittingGoal ? 'Menyimpan...' : 'Simpan Target Baru' }}
+        </button>
+      </form>
+    </AppModal>
+
+    <!-- ===== Modal Edit Target ===== -->
+    <AppModal v-model="showModalEdit" title="Edit Target Tabungan">
+      <form @submit.prevent="handleEditGoal">
+        <div class="field">
+          <label>Nama Goal</label>
+          <input v-model="formNamaGoal" type="text" required placeholder="Contoh: Beli Laptop" />
+        </div>
+        <div class="field">
+          <label>Target Jumlah (Rp)</label>
+          <input 
+            v-model="formTargetJumlah" 
+            type="text" 
+            required 
+            placeholder="1.000.000" 
+            @input="onInputFormat('formTargetJumlah', $event)" 
+          />
+        </div>
+        <div class="field">
+          <label>Deadline</label>
+          <input v-model="formDeadline" type="date" required />
+        </div>
+        <button type="submit" class="btn btn-success btn-block" :disabled="isSubmittingGoal">
+          <BaseSpinner v-if="isSubmittingGoal" />
+          {{ isSubmittingGoal ? 'Menyimpan...' : 'Simpan Perubahan' }}
         </button>
       </form>
     </AppModal>
@@ -157,6 +186,7 @@ const { showToast } = useToast()
 
 const isLoading = ref(true)
 const goals = ref([])
+const isWarningActive = ref(false)
 
 // --- State Tambah Target ---
 const showModalTambah = ref(false)
@@ -164,6 +194,10 @@ const formNamaGoal = ref('')
 const formTargetJumlah = ref('')
 const formDeadline = ref('')
 const isSubmittingGoal = ref(false)
+
+// --- State Edit Target ---
+const showModalEdit = ref(false)
+const editGoalId = ref(null)
 
 // --- State Isi Tabungan ---
 const showModalIsi = ref(false)
@@ -251,7 +285,7 @@ async function handleTambahGoal() {
 
   let { error } = await supabase.from('goals').insert([payload])
 
-  if (error && error.message.includes('target_jumlah')) {
+  if (error && error.message && error.message.includes('target_jumlah')) {
     delete payload.target_jumlah
     payload.target_nominal = targetVal
     const retry = await supabase.from('goals').insert([payload])
@@ -267,6 +301,57 @@ async function handleTambahGoal() {
 
   showModalTambah.value = false
   showToast({ type: 'success', title: 'Berhasil', text: 'Target berhasil dibuat!' })
+  await muatGoals()
+}
+
+// --- Fungsi Edit Target ---
+function bukaModalEdit(goal) {
+  editGoalId.value = goal.id
+  formNamaGoal.value = goal.nama_goal
+  formTargetJumlah.value = formatRibuan(goal.target_jumlah || goal.target_nominal || 0)
+  formDeadline.value = goal.deadline || ''
+  showModalEdit.value = true
+}
+
+async function handleEditGoal() {
+  const targetVal = parseAngka(formTargetJumlah.value)
+  if (targetVal <= 0) {
+    showToast({ type: 'warning', title: 'Nominal tidak valid', text: 'Target nominal harus lebih dari 0' })
+    return
+  }
+
+  isSubmittingGoal.value = true
+
+  let payload = {
+    nama_goal: formNamaGoal.value,
+    target_jumlah: targetVal,
+    deadline: formDeadline.value,
+  }
+
+  let { error } = await supabase
+    .from('goals')
+    .update(payload)
+    .eq('id', editGoalId.value)
+
+  if (error && error.message && error.message.includes('target_jumlah')) {
+    delete payload.target_jumlah
+    payload.target_nominal = targetVal
+    const retry = await supabase
+      .from('goals')
+      .update(payload)
+      .eq('id', editGoalId.value)
+    error = retry.error
+  }
+
+  isSubmittingGoal.value = false
+
+  if (error) {
+    showToast({ type: 'error', title: 'Gagal memperbarui target', text: error.message })
+    return
+  }
+
+  showModalEdit.value = false
+  showToast({ type: 'success', title: 'Berhasil', text: 'Target berhasil diperbarui!' })
   await muatGoals()
 }
 
@@ -345,7 +430,27 @@ async function handleTarikTabungan() {
 }
 
 function bukaModalKonfirmasiHapus(goal) {
-  if (persenGoal(goal) < 100) return
+  // Cek apakah ada saldo/dana terkumpul di dalam target tersebut
+  const terkumpul = goal.terkumpul || 0
+  if (terkumpul > 0) {
+    // Cegah spam notifikasi jika sedang aktif
+    if (isWarningActive.value) return
+
+    isWarningActive.value = true
+    showToast({ 
+      type: 'warning', 
+      title: 'Tidak bisa dihapus', 
+      text: 'Tidak bisa dihapus karena ada uang di tabungan tersebut' 
+    })
+
+    // Reset status aktif toast setelah 2 detik agar bisa diperingatkan lagi jika diklik di waktu berbeda
+    setTimeout(() => {
+      isWarningActive.value = false
+    }, 5000)
+
+    return
+  }
+
   selectedGoalHapus.value = goal
   showModalHapus.value = true
 }
@@ -355,7 +460,6 @@ async function prosesHapusGoal() {
 
   isSubmittingHapus.value = true
 
-  // Hapus langsung target yang sudah 100% lunas
   const { error } = await supabase
     .from('goals')
     .delete()
@@ -370,7 +474,7 @@ async function prosesHapusGoal() {
 
   showToast({ 
     type: 'success', 
-    title: 'Target Selesai!', 
+    title: 'Berhasil', 
     text: `Target ${selectedGoalHapus.value.nama_goal} berhasil dihapus dari daftar.` 
   })
 

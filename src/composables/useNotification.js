@@ -11,13 +11,19 @@ export function useNotification() {
       return false
     }
 
+    // Cek jika pengguna sebelumnya sudah memblokir izin secara permanen
+    if (Notification.permission === 'denied') {
+      alert('Izin notifikasi diblokir oleh browser. Silakan ubah pengaturannya melalui ikon gembok di sebelah alamat website (URL).')
+      return false
+    }
+
     try {
       const result = await Notification.requestPermission()
       permission.value = result
       
       if (result === 'granted') {
         // Tampilkan notifikasi konfirmasi langsung ke HP
-        sendNativeNotification('Pengingat Aktif! 🎉', {
+        await sendNativeNotification('Pengingat Aktif! 🎉', {
           body: 'Notifikasi pengingat catatan keuangan 4x sehari berhasil diaktifkan di HP kamu.'
         })
       }
@@ -32,20 +38,25 @@ export function useNotification() {
   const sendNativeNotification = async (title, options = {}) => {
     if (permission.value !== 'granted') return
 
-    // Menggunakan Service Worker PWA jika tersedia
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready
-      registration.showNotification(title, {
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        vibrate: [200, 100, 200], // Efek getar HP
-        ...options
-      })
-    } else {
-      new Notification(title, {
-        icon: '/favicon.ico',
-        ...options
-      })
+    try {
+      // Menggunakan Service Worker PWA jika tersedia dan aktif
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        const registration = await navigator.serviceWorker.ready
+        await registration.showNotification(title, {
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          vibrate: [200, 100, 200], // Efek getar HP
+          ...options
+        })
+      } else {
+        // Fallback langsung menggunakan objek Notification standar browser
+        new Notification(title, {
+          icon: '/favicon.ico',
+          ...options
+        })
+      }
+    } catch (error) {
+      console.error('Gagal mengirimkan native notification:', error)
     }
   }
 
@@ -65,6 +76,7 @@ export function useNotification() {
     const currentMinute = now.getMinutes()
 
     SCHEDULE_TIMES.forEach(schedule => {
+      // Pengecohan toleransi menit (bisa disesuaikan jika interval berjalan tiap 1 menit)
       if (currentHour === schedule.hour && currentMinute === schedule.minute) {
         const lastSentKey = `notif_last_sent_${schedule.name}`
         const todayStr = now.toISOString().split('T')[0]
@@ -82,6 +94,7 @@ export function useNotification() {
 
   const initNotificationScheduler = () => {
     checkAndTriggerNotification()
+    // Interval pengecekan setiap 30 detik
     setInterval(checkAndTriggerNotification, 30000)
   }
 

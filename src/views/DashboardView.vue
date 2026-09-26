@@ -154,7 +154,7 @@ import SkeletonBlock from "../components/SkeletonBlock.vue";
 
 const { user } = useAuth();
 const { showToast } = useToast();
-const { permission, requestPermission } = useNotification();
+const { permission, requestPermission, initNotificationScheduler } = useNotification();
 
 // ----- state utama dashboard -----
 const isLoading = ref(true);
@@ -316,9 +316,13 @@ function parseAngka(val) {
 function onInputBudgetFormat(event) {
   inputBudget.value = formatRibuan(event.target.value);
 }
+
 onMounted(async () => {
   await muatDashboard();
   await muatBudget();
+  
+  // Mengaktifkan penjadwalan pengecekan notifikasi 4x sehari
+  initNotificationScheduler();
 });
 </script>
 
